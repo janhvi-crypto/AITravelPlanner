@@ -1,0 +1,25 @@
+{
+  "name": "ai-travel-planner-backend",
+  "version": "1.0.0",
+  "description": "Unified backend: auth + trips (feature-trip) + AI/weather (member-3/main)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@google/genai": "^2.16.0",
+    "@supabase/supabase-js": "^2.112.2",
+    "axios": "^1.19.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "pdfkit": "^0.19.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
