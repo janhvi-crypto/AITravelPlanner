@@ -1,144 +1,114 @@
-function buildTripPrompt({ destination, budget, days }) {
-    return `
-You are an expert AI travel planner.
+function buildTripPrompt(prefs = {}) {
+  const {
+    destination,
+    budget,
+    days,
+    people = 1,
+    transport = "Public / local",
+    food_preference = "Local cuisine",
+    travel_style = "Balanced",
+    interests = [],
+    safety_preference = "Standard",
+    pet_friendly = false,
+    festival_music = "",
+  } = prefs;
+
+  const interestList = Array.isArray(interests)
+    ? interests.join(", ")
+    : String(interests || "general sightseeing");
+
+  return `
+You are an expert AI travel planner for trips in India and nearby destinations.
 
 Create a detailed, realistic, practical and budget-conscious travel plan.
 
 TRIP DETAILS:
-Destination: ${destination}
-Total Budget: ₹${budget}
-Number of Days: ${days}
+- Destination: ${destination}
+- Total Budget: ₹${budget}
+- Number of Days: ${days}
+- Travellers: ${people}
+- Preferred transport: ${transport}
+- Food preference: ${food_preference}
+- Travel style: ${travel_style}
+- Interests: ${interestList || "general sightseeing"}
+- Safety preference: ${safety_preference}
+- Pet friendly needed: ${pet_friendly ? "Yes" : "No"}
+- Festival / music preference: ${festival_music || "None"}
 
 IMPORTANT:
-- The entire trip must stay within the total budget of ₹${budget}.
+- Stay within the total budget of ₹${budget}.
 - Create exactly ${days} days in the itinerary.
-- The itinerary should be practical and not overcrowded.
-- Consider realistic travel time between places.
-- Use Indian Rupees (₹) for all estimated costs.
-- Costs are estimates only, not live prices.
-- Do not invent live availability, current ratings, opening hours or exact current prices.
-- Do not claim that a place or restaurant is currently open unless verified by an external API.
-- Recommend a mixture of popular attractions and local/less-crowded places when appropriate.
-- Include authentic local food.
-- Consider the destination's culture, weather and safety.
-- Avoid recommending activities that are unrealistic for the number of days.
-- Make sure the budget allocation approximately adds up to the total budget.
+- Respect food preference (${food_preference}) and travel style (${travel_style}).
+- Prefer ${transport} where practical.
+- Account for ${people} traveller(s) in cost estimates.
+- Be practical — do not overcrowd days; include travel time between spots.
+- Use Indian Rupees (₹) for all estimated costs (estimates only, not live prices).
+- Do not invent live availability, opening hours, or exact current prices.
+- Include authentic local food that fits the food preference.
+- Include destination-specific safety tips and cultural etiquette.
+${pet_friendly ? "- Include pet-friendly stays/activities where possible." : ""}
+${festival_music ? `- Weave in festival/music interest: ${festival_music}.` : ""}
 
 RETURN FORMAT:
+Return ONLY valid JSON. No markdown. No code fences. No comments. No trailing commas.
 
-Return ONLY valid JSON.
-
-DO NOT:
-- Use markdown.
-- Use code blocks.
-- Add explanations before or after the JSON.
-- Add comments inside the JSON.
-- Add trailing commas.
-- Return invalid JSON.
-
-Use exactly this structure:
+Use exactly this structure (snake_case keys):
 
 {
-    "destination": "${destination}",
-    "days": ${days},
-    "budget": ${budget},
-
-    "dailyCostEstimate": 0,
-
-    "bestTimeToVisit": "",
-
-    "safetyTips": [
-        ""
-    ],
-
-    "culturalEtiquette": [
-        ""
-    ],
-
-    "placesToVisit": [
-        {
-            "name": "",
-            "description": "",
-            "estimatedTime": ""
-        }
-    ],
-
-    "itinerary": [
-        {
-            "day": 1,
-            "title": "",
-            "activities": [
-                {
-                    "time": "",
-                    "activity": "",
-                    "description": "",
-                    "estimatedCost": 0
-                }
-            ]
-        }
-    ],
-
-    "mustTryFood": [
-        {
-            "name": "",
-            "description": ""
-        }
-    ],
-
-    "packingList": [
-        ""
-    ],
-
-    "travelChecklist": [
-        ""
-    ],
-
-    "budgetAllocation": {
-        "accommodation": 0,
-        "food": 0,
-        "transportation": 0,
-        "activities": 0,
-        "miscellaneous": 0
-    },
-
-    "transportationPlan": [
-        {
-            "type": "",
-            "description": "",
-            "estimatedCost": 0
-        }
-    ]
+  "destination": "${destination}",
+  "days": ${days},
+  "budget": ${budget},
+  "overview": {
+    "Destination": "${destination}",
+    "Duration": "${days} Days",
+    "Budget": "₹${budget}",
+    "Pacing": "${travel_style}",
+    "Experience": "short one-line summary"
+  },
+  "itinerary": [
+    {
+      "day": 1,
+      "title": "",
+      "weather": "",
+      "blocks": [
+        { "time": "Morning", "activity": "", "detail": "", "cost": 0 }
+      ]
+    }
+  ],
+  "places": [
+    { "name": "", "category": "", "note": "" }
+  ],
+  "packing_list": [""],
+  "travel_checklist": [""],
+  "budget_breakdown": {
+    "Accommodation": 0,
+    "Food": 0,
+    "Transportation": 0,
+    "Activities": 0,
+    "Miscellaneous": 0
+  },
+  "transport_plan": [
+    { "route": "", "mode": "", "cost": 0, "duration": "" }
+  ],
+  "must_try_food": [
+    { "name": "", "where": "", "cost": 0 }
+  ],
+  "safety_tips": [""],
+  "cultural_etiquette": [""],
+  "daily_costs": [
+    { "day": 1, "total": 0 }
+  ]
 }
 
 CONTENT REQUIREMENTS:
+1. Exactly ${days} itinerary day objects, numbered 1..${days}.
+2. Each day: morning / afternoon / evening blocks where appropriate.
+3. budget_breakdown values must sum to roughly ≤ ₹${budget}.
+4. daily_costs length must equal ${days}.
+5. Keep geography practical for ${destination}.
+6. Costs are estimates only.
 
-1. Generate exactly ${days} itinerary objects.
-2. Each itinerary object must have the correct day number from 1 to ${days}.
-3. Each day should contain a reasonable number of activities.
-4. Include morning, afternoon and evening activities where appropriate.
-5. Include estimated costs for activities.
-6. The total estimated cost of accommodation, food, transportation, activities and miscellaneous expenses should not exceed ₹${budget}.
-7. The following must be approximately true:
-
-   accommodation + food + transportation + activities + miscellaneous <= ${budget}
-
-8. dailyCostEstimate should represent a reasonable average daily spending amount based on the total budget.
-9. Include important attractions suitable for ${destination}.
-10. Include some local or less-crowded experiences when appropriate.
-11. Include destination-specific safety tips.
-12. Include destination-specific cultural etiquette.
-13. Include practical transportation options.
-14. Include useful packing items based on the destination and expected activities.
-15. Include a practical travel checklist.
-16. Include authentic local food recommendations.
-17. Avoid recommending food that conflicts with the destination's cuisine unless appropriate.
-18. Keep the itinerary geographically practical. Avoid unnecessarily travelling back and forth across the destination.
-19. Do not create impossible schedules.
-20. If the destination is expensive, prioritize activities and accommodation options that can realistically fit the given budget.
-21. If the budget is very low, clearly prioritize low-cost or free attractions and activities.
-22. All costs should be reasonable estimates and should not be presented as live prices.
-
-The final response MUST be valid JSON matching the exact structure above.
+The final response MUST be valid JSON matching the structure above.
 `;
 }
 

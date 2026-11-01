@@ -49,15 +49,27 @@ function AuthPage() {
         mode === "signin"
           ? await authApi.login(email, password)
           : await authApi.signup(name, email, password);
+
+      if ((data as { needsEmailConfirmation?: boolean })?.needsEmailConfirmation || !data?.token) {
+        toast.info("Check your email to confirm, then sign in", {
+          description: "Or disable Confirm email in Supabase → Authentication → Providers → Email.",
+        });
+        setMode("signin");
+        return;
+      }
+
       saveSession(data.user ?? { name: name || email.split("@")[0], email }, data.token);
-    } catch {
-      toast.info("Backend not connected — continuing in demo mode", {
-        description: "POST /auth/login will take over once the server is live.",
-      });
-      saveSession({ name: name || (email.split("@")[0] ?? "Traveller"), email });
+      toast.success(mode === "signin" ? "Signed in" : "Account created");
+      navigate({ to: "/dashboard" });
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { message?: string } }; message?: string };
+      const msg =
+        ax?.response?.data?.message ||
+        ax?.message ||
+        "Could not reach the backend. Is it running on port 5000?";
+      toast.error(msg);
     } finally {
       setLoading(false);
-      navigate({ to: "/dashboard" });
     }
   }
 

@@ -1,5 +1,9 @@
 const { createClient } = require("@supabase/supabase-js");
-const { supabase, supabaseUrl, supabaseKey } = require("../config/supabase");
+const { supabase, supabaseUrl, supabaseKey, isConfigured } = require("../config/supabase");
+
+function allowDemoAuth() {
+  return String(process.env.ALLOW_DEMO_AUTH || "false").toLowerCase() === "true";
+}
 
 function mapUser(supabaseUser, fallbackName = "") {
   const meta = supabaseUser?.user_metadata || {};
@@ -33,42 +37,55 @@ async function signup(req, res) {
     }
 
     const cleanEmail = String(email).trim().toLowerCase();
+    const displayName = name?.trim() || cleanEmail.split("@")[0];
 
-    // Try Supabase auth if configured
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email: cleanEmail,
-        password: String(password),
-        options: {
-          data: {
-            name: name?.trim() || cleanEmail.split("@")[0],
-          },
-        },
-      });
-
-      if (!error && data?.user) {
-        const token = data.session?.access_token || `atp_token_${Date.now()}`;
-        return res.status(201).json({
-          message: "Registered successfully",
-          token,
-          user: mapUser(data.user, name),
+    if (!isConfigured) {
+      if (!allowDemoAuth()) {
+        return res.status(503).json({
+          message:
+            "Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY to backend/.env (see docs/SUPABASE_AND_GEMINI_SETUP.md).",
         });
       }
-    } catch (e) {
-      console.warn("Supabase auth signup fallback:", e.message);
+      const mockUser = { id: `usr_${Date.now()}`, email: cleanEmail, name: displayName };
+      return res.status(201).json({
+        message: "Registered in demo mode (Supabase not configured)",
+        token: `atp_session_${Date.now()}`,
+        user: mockUser,
+      });
     }
 
-    // Fallback auth token for reliable local development
-    const mockUser = {
-      id: `usr_${Date.now()}`,
+    const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
-      name: name?.trim() || cleanEmail.split("@")[0] || "Traveller",
-    };
+      password: String(password),
+      options: {
+        data: { name: displayName },
+      },
+    });
+
+    if (error) {
+      return res.status(400).json({ message: error.message || "Signup failed" });
+    }
+
+    if (!data?.user) {
+      return res.status(400).json({ message: "Signup failed — no user returned" });
+    }
+
+    // If email confirmation is ON, session may be null — tell the user clearly
+    const token = data.session?.access_token;
+    if (!token) {
+      return res.status(201).json({
+        message:
+          "Account created. Confirm your email (or disable Confirm email in Supabase Auth settings), then log in.",
+        token: null,
+        user: mapUser(data.user, displayName),
+        needsEmailConfirmation: true,
+      });
+    }
 
     return res.status(201).json({
       message: "Registered successfully",
-      token: `atp_session_${Date.now()}`,
-      user: mockUser,
+      token,
+      user: mapUser(data.user, displayName),
     });
   } catch (error) {
     console.error("Signup error:", error);
@@ -86,35 +103,47 @@ async function login(req, res) {
 
     const cleanEmail = String(email).trim().toLowerCase();
 
-    // Try Supabase auth if configured
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: String(password),
-      });
-
-      if (!error && data?.user) {
-        return res.json({
-          message: "Login successful",
-          token: data.session?.access_token || `atp_token_${Date.now()}`,
-          user: mapUser(data.user),
+    if (!isConfigured) {
+      if (!allowDemoAuth()) {
+        return res.status(503).json({
+          message:
+            "Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY to backend/.env.",
         });
       }
-    } catch (e) {
-      console.warn("Supabase auth login fallback:", e.message);
+      const mockUser = {
+        id: `usr_${cleanEmail.replace(/[^a-z0-9]/g, "_")}`,
+        email: cleanEmail,
+        name: cleanEmail.split("@")[0] || "Traveller",
+      };
+      return res.json({
+        message: "Login successful (demo mode)",
+        token: `atp_session_${Date.now()}`,
+        user: mockUser,
+      });
     }
 
-    // Direct successful login fallback for local developer testing
-    const mockUser = {
-      id: `usr_${cleanEmail.replace(/[^a-z0-9]/g, "_")}`,
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
-      name: cleanEmail.split("@")[0] || "Traveller",
-    };
+      password: String(password),
+    });
+
+    if (error || !data?.user) {
+      return res.status(401).json({
+        message: error?.message || "Invalid email or password",
+      });
+    }
+
+    const token = data.session?.access_token;
+    if (!token) {
+      return res.status(401).json({
+        message: "Login succeeded but no session token. Check Supabase Auth email confirmation settings.",
+      });
+    }
 
     return res.json({
       message: "Login successful",
-      token: `atp_session_${Date.now()}`,
-      user: mockUser,
+      token,
+      user: mapUser(data.user),
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -130,8 +159,8 @@ async function logout(req, res) {
       try {
         const authed = clientWithToken(token);
         await authed.auth.signOut();
-      } catch (e) {
-        // Safe fallback
+      } catch (_) {
+        // ignore
       }
     }
     return res.status(204).send();
@@ -149,22 +178,16 @@ async function profile(req, res) {
     }
 
     const token = header.slice(7);
-    try {
-      const { data, error } = await supabase.auth.getUser(token);
-      if (!error && data?.user) {
-        return res.json({ user: mapUser(data.user) });
-      }
-    } catch (e) {
-      // Ignore
+    if (token.startsWith("atp_")) {
+      return res.status(401).json({ message: "Demo token — please sign in with Supabase" });
     }
 
-    return res.json({
-      user: {
-        id: "usr_active",
-        email: "traveller@example.com",
-        name: "Traveller",
-      },
-    });
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) {
+      return res.status(401).json({ message: "Invalid or expired token" });
+    }
+
+    return res.json({ user: mapUser(data.user) });
   } catch (error) {
     console.error("Profile error:", error);
     return res.status(500).json({ message: "Server error fetching profile" });

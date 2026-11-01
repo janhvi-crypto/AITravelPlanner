@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ImagePlus, MapPin, Video } from "lucide-react";
 import { toast } from "sonner";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { reviewsApi } from "@/services/api";
+import { getToken, reviewsApi } from "@/services/api";
 import { PLACES, REVIEWS, type Review } from "@/services/sampleData";
 
 export const Route = createFileRoute("/reviews")({
@@ -39,43 +39,55 @@ function ReviewsPage() {
   const [location, setLocation] = useState("");
   const [files, setFiles] = useState<string[]>([]);
   const [feed, setFeed] = useState<Review[]>(REVIEWS);
+  const [publishing, setPublishing] = useState(false);
+
+  useEffect(() => {
+    reviewsApi
+      .list()
+      .then((res) => {
+        const rows = Array.isArray(res.data) ? res.data : [];
+        if (rows.length) setFeed(rows as Review[]);
+      })
+      .catch(() => {
+        /* keep sample feed if backend is down */
+      });
+  }, []);
 
   async function publish() {
     if (!text.trim()) {
       toast.error("Write a few words about your experience");
       return;
     }
-    const form = new FormData();
-    form.append("place", place);
-    form.append("category", category);
-    form.append("rating", String(rating));
-    form.append("text", text);
-    form.append("location", location);
-    try {
-      // POST {VITE_API_BASE_URL}/reviews  (multipart: photos[], videos[])
-      await reviewsApi.create(form);
-      toast.success("Review published");
-    } catch {
-      toast.info("Backend not connected — added locally", {
-        description: "POST /reviews will persist this once the server is live.",
+    if (!getToken()) {
+      toast.error("Please sign in first", {
+        description: "Reviews are saved to your Supabase account.",
       });
+      return;
     }
-    setFeed([
-      {
-        id: crypto.randomUUID(),
+
+    setPublishing(true);
+    try {
+      const res = await reviewsApi.create({
         place,
-        author: "You",
-        rating,
         category,
+        rating,
         text,
         location,
-        createdAt: "just now",
-      },
-      ...feed,
-    ]);
-    setText("");
-    setLocation("");
-    setFiles([]);
+      });
+      const saved = res.data as Review;
+      setFeed([saved, ...feed.filter((r) => r.id !== saved.id)]);
+      toast.success("Review saved to Supabase");
+      setText("");
+      setLocation("");
+      setFiles([]);
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Could not save review";
+      toast.error(message);
+    } finally {
+      setPublishing(false);
+    }
   }
 
   return (
@@ -185,8 +197,8 @@ function ReviewsPage() {
               )}
             </div>
 
-            <Button className="w-full" size="lg" onClick={publish}>
-              Publish
+            <Button className="w-full" size="lg" onClick={publish} disabled={publishing}>
+              {publishing ? "Publishing…" : "Publish"}
             </Button>
           </div>
         </section>

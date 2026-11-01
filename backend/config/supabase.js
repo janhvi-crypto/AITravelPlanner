@@ -1,20 +1,38 @@
 const { createClient } = require("@supabase/supabase-js");
 
-const supabaseUrl =
-  process.env.SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL;
+/**
+ * Auth client — use the anon / publishable key (safe for signUp / signIn).
+ */
+function normalizeSupabaseUrl(raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/\/rest\/v1\/?$/i, "")
+    .replace(/\/+$/, "");
+}
+
+const supabaseUrl = normalizeSupabaseUrl(
+  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+);
 
 const supabaseKey =
+  process.env.SUPABASE_ANON_KEY ||
   process.env.SUPABASE_PUBLISHABLE_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  process.env.SUPABASE_ANON_KEY;
+  "";
 
-if (!supabaseUrl || !supabaseKey) {
+const isConfigured = Boolean(supabaseUrl && supabaseKey);
+
+if (!isConfigured) {
   console.warn(
-    "Missing Supabase URL or publishable key. Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in backend/.env"
+    "[supabase auth] Missing SUPABASE_URL or SUPABASE_ANON_KEY / SUPABASE_PUBLISHABLE_KEY in backend/.env"
   );
 }
 
-const supabase = createClient(supabaseUrl || "", supabaseKey || "");
+const supabase = createClient(supabaseUrl || "http://localhost", supabaseKey || "missing", {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+});
 
-module.exports = { supabase, supabaseUrl, supabaseKey };
+module.exports = { supabase, supabaseUrl, supabaseKey, isConfigured };

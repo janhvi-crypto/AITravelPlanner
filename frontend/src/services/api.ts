@@ -23,8 +23,8 @@ import axios from "axios";
  *
  *  REVIEWS
  *   GET    /reviews?place=delhi                                  -> Review[]
- *   POST   /reviews  (multipart: place, rating, text, category,
- *                     location, photos[], videos[])              -> Review
+ *   POST   /reviews  { place, rating, text, category, location } -> Review
+ *          (auth required — saved to Supabase `reviews` table)
  *
  *  TRIPS (CRUD already implemented on the backend)
  *   POST   /trip/generate  { destination, budget, days, people,
@@ -130,9 +130,10 @@ export const placesApi = {
 /** Unwrap `{ success, data|trips|trip }` payloads from the Express backend. */
 function unwrap<T = unknown>(payload: any): T {
   if (payload == null) return payload as T;
+  // Prefer explicit collections first (history returns { trips: [...] })
+  if (Array.isArray(payload.trips)) return payload.trips as T;
+  if (payload.trip != null && typeof payload.trip === "object") return payload.trip as T;
   if (payload.data != null && typeof payload.data === "object") return payload.data as T;
-  if (payload.trips != null) return payload.trips as T;
-  if (payload.trip != null) return payload.trip as T;
   return payload as T;
 }
 
@@ -151,8 +152,13 @@ export const weatherApi = {
 
 export const reviewsApi = {
   list: (place?: string) => api.get("/reviews", { params: { place } }),
-  create: (form: FormData) =>
-    api.post("/reviews", form, { headers: { "Content-Type": "multipart/form-data" } }),
+  create: (payload: {
+    place: string;
+    category: string;
+    rating: number;
+    text: string;
+    location?: string;
+  }) => api.post("/reviews", payload),
 };
 
 export const tripApi = {

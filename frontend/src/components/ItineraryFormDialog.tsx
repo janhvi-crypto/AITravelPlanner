@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { tripApi, type TripPreferences } from "@/services/api";
+import { getToken, tripApi, type TripPreferences } from "@/services/api";
 import { sampleItinerary } from "@/services/sampleData";
 import { storeTrip } from "@/lib/tripStore";
 import { toast } from "sonner";
@@ -110,6 +110,16 @@ export function ItineraryFormDialog({
       // POST {VITE_API_BASE_URL}/trip/generate
       const { data } = await tripApi.generate(payload);
       storeTrip({ prefs: payload, data, source: "api" });
+
+      // Auto-save to Supabase so it appears under My Itinerary for this user
+      if (getToken()) {
+        try {
+          await tripApi.save({ ...payload, plan: data });
+          toast.success("Itinerary ready and saved to your history");
+        } catch {
+          toast.info("Itinerary ready — tap Save trip if it does not appear in history");
+        }
+      }
     } catch {
       toast.info("Backend not reachable — showing a sample plan", {
         description: "POST /trip/generate will replace this once the server is live.",

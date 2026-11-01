@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { CloudRain, Search, Sparkles, Sun } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { PlaceCard } from "@/components/PlaceCard";
 import { Input } from "@/components/ui/input";
-import { PLACES, REVIEWS } from "@/services/sampleData";
+import { reviewsApi } from "@/services/api";
+import { PLACES, REVIEWS, type Review } from "@/services/sampleData";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -27,6 +28,19 @@ export const Route = createFileRoute("/dashboard")({
 
 function Dashboard() {
   const [query, setQuery] = useState("");
+  const [publicReviews, setPublicReviews] = useState<Review[]>(REVIEWS);
+
+  useEffect(() => {
+    reviewsApi
+      .list()
+      .then((res) => {
+        const rows = Array.isArray(res.data) ? (res.data as Review[]) : [];
+        if (rows.length) setPublicReviews(rows.slice(0, 6));
+      })
+      .catch(() => {
+        /* keep sample reviews if API is down */
+      });
+  }, []);
 
   // GET /places?search=&region=india  → replace PLACES with the API response
   const results = useMemo(() => {
@@ -111,9 +125,19 @@ function Dashboard() {
         </section>
 
         <section className="mt-14">
-          <h2 className="text-lg font-semibold">Latest traveller reviews</h2>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Latest traveller reviews</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Public tips from people who already visited.
+              </p>
+            </div>
+            <Link to="/reviews" className="text-sm text-primary underline underline-offset-4">
+              Write a review
+            </Link>
+          </div>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
-            {REVIEWS.map((r) => (
+            {publicReviews.map((r) => (
               <article key={r.id} className="rounded-xl border border-border bg-card p-5">
                 <div className="flex items-center justify-between">
                   <p className="font-medium">{r.place}</p>
@@ -121,7 +145,8 @@ function Dashboard() {
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">{r.text}</p>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  {r.author} · {r.category} · {r.createdAt}
+                  {r.author} · {r.category}
+                  {r.location ? ` · ${r.location}` : ""} · {r.createdAt}
                 </p>
               </article>
             ))}

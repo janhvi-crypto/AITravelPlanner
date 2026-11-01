@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, CloudRain, MapPin, Shield, Star, Sun, Utensils } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { ItineraryFormDialog } from "@/components/ItineraryFormDialog";
-import { PLACES, REVIEWS } from "@/services/sampleData";
+import { reviewsApi } from "@/services/api";
+import { PLACES, REVIEWS, type Review } from "@/services/sampleData";
 
 export const Route = createFileRoute("/places/$slug")({
   head: ({ params }) => {
@@ -30,8 +31,22 @@ export const Route = createFileRoute("/places/$slug")({
 function PlacePage() {
   const { slug } = Route.useParams();
   const [open, setOpen] = useState(false);
+  const [placeReviews, setPlaceReviews] = useState<Review[]>([]);
   // GET /places/:slug  → replace this lookup with the API response
   const place = PLACES.find((p) => p.slug === slug);
+
+  useEffect(() => {
+    if (!place) return;
+    reviewsApi
+      .list(place.name)
+      .then((res) => {
+        const rows = Array.isArray(res.data) ? (res.data as Review[]) : [];
+        setPlaceReviews(rows.length ? rows : REVIEWS.filter((r) => r.place === place.name));
+      })
+      .catch(() => {
+        setPlaceReviews(REVIEWS.filter((r) => r.place === place.name));
+      });
+  }, [place]);
 
   if (!place) {
     return (
@@ -50,7 +65,9 @@ function PlacePage() {
     );
   }
 
-  const reviews = REVIEWS.filter((r) => r.place === place.name);
+  const reviews = placeReviews.length
+    ? placeReviews
+    : REVIEWS.filter((r) => r.place === place.name);
 
   return (
     <div className="min-h-screen">
@@ -131,7 +148,8 @@ function PlacePage() {
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">{r.text}</p>
                   <p className="mt-3 text-xs text-muted-foreground">
-                    {r.category} · {r.location} · {r.createdAt}
+                    {r.category}
+                    {r.location ? ` · ${r.location}` : ""} · {r.createdAt}
                   </p>
                 </article>
               ))}

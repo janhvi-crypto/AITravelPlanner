@@ -12,18 +12,21 @@ const {
 } = require("../controllers/tripController");
 
 const { aiRateLimiter } = require("../middleware/rateLimiter");
+const { requireAuth } = require("../middleware/authMiddleware");
 
-// Static paths before /:id
+// Public / soft-auth: AI generate + PDF (no DB write)
 router.post("/generate", aiRateLimiter, generateTrip);
 router.post("/pdf", generateTripPdfController);
 router.post("/generate-pdf", generateTripPdfController);
-router.post("/save", createTripController);
-router.post("/", createTripController);
-router.get("/history", getTripHistoryController);
-router.delete("/delete/:id", deleteTripController);
 
-router.get("/:id", getTripByIdController);
-router.put("/:id", updateTripController);
-router.delete("/:id", deleteTripController);
+// Protected: must be logged in with a real Supabase token
+router.post("/save", requireAuth, createTripController);
+router.post("/", requireAuth, createTripController);
+router.get("/history", requireAuth, getTripHistoryController);
+router.delete("/delete/:id", requireAuth, deleteTripController);
+
+router.get("/:id", requireAuth, getTripByIdController);
+router.put("/:id", requireAuth, updateTripController);
+router.delete("/:id", requireAuth, deleteTripController);
 
 module.exports = router;
